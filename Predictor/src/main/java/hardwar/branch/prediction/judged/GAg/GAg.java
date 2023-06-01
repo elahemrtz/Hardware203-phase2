@@ -1,7 +1,8 @@
 package hardwar.branch.prediction.judged.GAg;
 
 import hardwar.branch.prediction.shared.*;
-import hardwar.branch.prediction.shared.devices.*;
+import hardwar.branch.prediction.shared.devices.Cache;
+import hardwar.branch.prediction.shared.devices.ShiftRegister;
 
 import java.util.Arrays;
 
@@ -24,61 +25,56 @@ public class GAg implements BranchPredictor {
         // Initialize the BHR register with the given size and no default value
         this.BHR = new ShiftRegister(BHRSize);
 
-        // Initialize the PHT with a size of 2^size and each entry having a saturating counter of size "SCSize"
-        int phtSize = (int) Math.pow(2, BHRSize);
-        this.PHT = new Cache<>(phtSize, getDefaultBlock());
+        // Initialize the PHT with a size of 2^BHRSize and each entry having a saturating counter of size "SCSize"
+        Bit[] defaultBlock = getDefaultBlock(SCSize);
+        this.PHT = new Cache<>(BHRSize, defaultBlock);
 
         // Initialize the SC register
         this.SC = new ShiftRegister(SCSize);
     }
 
     /**
-     * Predicts the result of a branch instruction based on the global branch history
+     * Predicts the result of a branch instruction based on the global branch history.
      *
      * @param branchInstruction the branch instruction
      * @return the predicted outcome of the branch instruction (taken or not taken)
      */
     @Override
     public BranchResult predict(BranchInstruction branchInstruction) {
-        // TODO : complete Task 1
-        Bit[] history = BHR.read();
-        Bit[] phtEntry = PHT.get(history);
-        Bit counter = phtEntry[0];
-
-        if (actual == BranchResult.TAKEN) {
-            if (counter == Bit.ONE || counter == Bit.TWO)
-                phtEntry[0] = Bit.THREE;
-            else if (counter == Bit.ZERO)
-                phtEntry[0] = Bit.ONE;
-        } else {
-            if (counter == Bit.ONE || counter == Bit.TWO)
-                phtEntry[0] = Bit.ZERO;
-            else if (counter == Bit.THREE)
-                phtEntry[0] = Bit.TWO;
-        }
-
-        PHT.put(history, phtEntry);
-        BHR.insert(actual == BranchResult.TAKEN ? Bit.ONE : Bit.ZERO);
-        SC.insert(actual == BranchResult.TAKEN ? Bit.ONE : Bit.ZERO);
+        Bit[] history = BHR.getValues();
+        Bit[] counter = PHT.get(history);
+        return counter[Bit.toNumber(counter)] == Bit.ZERO ? BranchResult.NOT_TAKEN : BranchResult.TAKEN;
     }
 
     /**
-     * Updates the values in the cache based on the actual branch result
+     * Updates the values in the cache based on the actual branch result.
      *
      * @param instruction the branch instruction
      * @param actual      the actual result of the branch condition
      */
     @Override
     public void update(BranchInstruction instruction, BranchResult actual) {
-        // TODO: complete Task 2
+        Bit[] history = BHR.getValues();
+        Bit[] counter = PHT.get(history);
+        int index = Bit.toNumber(counter);
+        if (actual == BranchResult.TAKEN) {
+            if (counter[index] != Bit.TWO) {
+                counter[index] = Bit.values()[counter[index].ordinal() + 1];
+            }
+        } else {
+            if (counter[index] != Bit.ZERO) {
+                counter[index] = Bit.values()[counter[index].ordinal() - 1];
+            }
+        }
+        PHT.update(history, counter);
+        BHR.shiftAndSet(actual == BranchResult.TAKEN ? Bit.ONE : Bit.ZERO);
     }
 
-
     /**
-     * @return a zero series of bits as default value of cache block
+     * @return a zero series of bits as the default value of the cache block
      */
-    private Bit[] getDefaultBlock() {
-        Bit[] defaultBlock = new Bit[SC.getLength()];
+    private Bit[] getDefaultBlock(int size) {
+        Bit[] defaultBlock = new Bit[size];
         Arrays.fill(defaultBlock, Bit.ZERO);
         return defaultBlock;
     }
