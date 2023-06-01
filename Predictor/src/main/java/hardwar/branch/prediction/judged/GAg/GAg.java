@@ -21,15 +21,15 @@ public class GAg implements BranchPredictor {
      * @param SCSize  the size of the register which hold the saturating counter value and the cache block size
      */
     public GAg(int BHRSize, int SCSize) {
-        // TODO : complete the constructor
         // Initialize the BHR register with the given size and no default value
-        this.BHR = null;
+        this.BHR = new ShiftRegister(BHRSize);
 
         // Initialize the PHT with a size of 2^size and each entry having a saturating counter of size "SCSize"
-        PHT = null;
+        int phtSize = (int) Math.pow(2, BHRSize);
+        this.PHT = new Cache<>(phtSize, getDefaultBlock());
 
         // Initialize the SC register
-        SC = null;
+        this.SC = new ShiftRegister(SCSize);
     }
 
     /**
@@ -41,7 +41,25 @@ public class GAg implements BranchPredictor {
     @Override
     public BranchResult predict(BranchInstruction branchInstruction) {
         // TODO : complete Task 1
-        return BranchResult.NOT_TAKEN;
+        Bit[] history = BHR.read();
+        Bit[] phtEntry = PHT.get(history);
+        Bit counter = phtEntry[0];
+
+        if (actual == BranchResult.TAKEN) {
+            if (counter == Bit.ONE || counter == Bit.TWO)
+                phtEntry[0] = Bit.THREE;
+            else if (counter == Bit.ZERO)
+                phtEntry[0] = Bit.ONE;
+        } else {
+            if (counter == Bit.ONE || counter == Bit.TWO)
+                phtEntry[0] = Bit.ZERO;
+            else if (counter == Bit.THREE)
+                phtEntry[0] = Bit.TWO;
+        }
+
+        PHT.put(history, phtEntry);
+        BHR.insert(actual == BranchResult.TAKEN ? Bit.ONE : Bit.ZERO);
+        SC.insert(actual == BranchResult.TAKEN ? Bit.ONE : Bit.ZERO);
     }
 
     /**
