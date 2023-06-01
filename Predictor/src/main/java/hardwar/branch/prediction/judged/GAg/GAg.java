@@ -55,19 +55,19 @@ public class GAg implements BranchPredictor {
     @Override
     public void update(BranchInstruction instruction, BranchResult actual) {
         Bit[] history = BHR.getValues();
-        Bit[] counter = PHT.get(history);
-        int index = Bit.toNumber(counter);
-        if (actual == BranchResult.TAKEN) {
-            if (counter[index] != Bit.TWO) {
-                counter[index] = Bit.values()[counter[index].ordinal() + 1];
-            }
-        } else {
-            if (counter[index] != Bit.ZERO) {
-                counter[index] = Bit.values()[counter[index].ordinal() - 1];
-            }
+    Bit[] counter = PHT.get(history);
+    int index = Bit.toNumber(counter);
+    if (actual == BranchResult.TAKEN) {
+        if (counter[index] != Bit.ONE) {
+            counter[index] = Bit.values()[counter[index].ordinal() + 1];
         }
-        PHT.update(history, counter);
-        BHR.shiftAndSet(actual == BranchResult.TAKEN ? Bit.ONE : Bit.ZERO);
+    } else {
+        if (counter[index] != Bit.ZERO) {
+            counter[index] = Bit.values()[counter[index].ordinal() - 1];
+        }
+    }
+    PHT.update(history, counter);
+    BHR.shiftAndSet(actual == BranchResult.TAKEN ? Bit.ONE : Bit.ZERO);
     }
 
     /**
