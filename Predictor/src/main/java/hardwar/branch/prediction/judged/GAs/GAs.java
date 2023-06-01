@@ -1,6 +1,5 @@
 package hardwar.branch.prediction.judged.GAs;
 
-
 import hardwar.branch.prediction.shared.*;
 import hardwar.branch.prediction.shared.devices.*;
 
@@ -19,71 +18,88 @@ public class GAs implements BranchPredictor {
         this(4, 2, 8, 4, HashMode.XOR);
     }
 
-    /**
-     * Creates a new GAs predictor with the given BHR register size and initializes the PAPHT based on
-     * the Ksize and saturating counter size
-     *
-     * @param BHRSize               the size of the BHR register
-     * @param SCSize                the size of the register which hold the saturating counter value
-     * @param branchInstructionSize the number of bits which is used for saving a branch instruction
-     */
-    public GAs(int BHRSize, int SCSize, int branchInstructionSize, int KSize, HashMode hashmode) {
-        // TODO: complete the constructor
-        this.branchInstructionSize = 0;
-        this.KSize = 0;
-        this.hashMode = HashMode.XOR;
+    public GAs(int BHRSize, int SCSize, int branchInstructionSize, int KSize, HashMode hashMode) {
+        this.branchInstructionSize = branchInstructionSize;
+        this.KSize = KSize;
+        this.hashMode = hashMode;
 
         // Initialize the BHR register with the given size and no default value
-        BHR = null;
+        BHR = new ShiftRegister(BHRSize);
 
-        // Initializing the PAPHT with K bit as PHT selector and 2^BHRSize row as each PHT entries
-        // number and SCSize as block size
-        PSPHT = null;
+        // Initialize the PSPHT with K bit as PHT selector and 2^BHRSize rows as each PHT entry
+        // number, and SCSize as the block size
+        PSPHT = new Cache<>((int) Math.pow(2, BHRSize), getDefaultBlock(SCSize));
 
         // Initialize the saturating counter
-        SC = null;
+        SC = new ShiftRegister(SCSize);
     }
 
     /**
-     * predicts the result of a branch instruction based on the global branch history and hash value of
-     * branch instruction address
+     * Predicts the result of a branch instruction based on the global branch history and hash value of
+     * branch instruction address.
      *
      * @param branchInstruction the branch instruction
      * @return the predicted outcome of the branch instruction (taken or not taken)
      */
     @Override
     public BranchResult predict(BranchInstruction branchInstruction) {
-        // TODO: complete Task 1
-        return BranchResult.NOT_TAKEN;
+        // Get the branch address bits
+        Bit[] branchAddress = branchInstruction.getBits();
+
+        // Get the cache entry using the branch address and BHR
+        Bit[] cacheEntry = getCacheEntry(branchAddress);
+
+        // Retrieve the corresponding cache block from the PSPHT
+        Bit[] cacheBlock = PSPHT.read(cacheEntry);
+
+        // Use the last bit of the cache block as the prediction
+        BranchResult prediction = cacheBlock[cacheBlock.length - 1].equals(Bit.ZERO)
+                ? BranchResult.NOT_TAKEN
+                : BranchResult.TAKEN;
+
+        return prediction;
     }
 
     /**
-     * Updates the value in the cache based on actual branch result
+     * Updates the value in the cache based on the actual branch result.
      *
      * @param branchInstruction the branch instruction
-     * @param actual            the actual result of branch (Taken or Not)
+     * @param actual            the actual result of the branch (taken or not taken)
      */
     @Override
     public void update(BranchInstruction branchInstruction, BranchResult actual) {
-        // TODO: complete Task 2
+        // Get the branch address bits
+        Bit[] branchAddress = branchInstruction.getBits();
+
+        // Get the cache entry using the branch address and BHR
+        Bit[] cacheEntry = getCacheEntry(branchAddress);
+
+        // Retrieve the corresponding cache block from the PSPHT
+        Bit[] cacheBlock = PSPHT.read(cacheEntry);
+
+        // Update the prediction in the cache block based on the actual result
+        Bit[] updatedBlock = Arrays.copyOf(cacheBlock, cacheBlock.length);
+        updatedBlock[updatedBlock.length - 1] = actual.equals(BranchResult.TAKEN) ? Bit.ONE : Bit.ZERO;
+
+        // Write the updated cache block back to the PSPHT
+        PSPHT.write(cacheEntry, updatedBlock);
     }
 
     /**
      * @return snapshot of caches and registers content
      */
     public String monitor() {
-        return "GAp predictor snapshot: \n" + BHR.monitor() + SC.monitor() + PSPHT.monitor();
+        return "GAs predictor snapshot: \n" + BHR.monitor() + SC.monitor() + PSPHT.monitor();
     }
 
-
     /**
-     * concat the PC and BHR to retrieve the desired address
+     * Concatenates the branch address hash and BHR to retrieve the desired address.
      *
      * @param branchAddress program counter
-     * @return concatenated value of first M bits of branch address and BHR
+     * @return concatenated value of the branch address hash and BHR
      */
     private Bit[] getCacheEntry(Bit[] branchAddress) {
-        // hash the branch address
+        // Hash the branch address
         Bit[] hashKSize = CombinationalLogic.hash(branchAddress, KSize, hashMode);
 
         // Concatenate the Hash bits with the BHR bits
@@ -95,8 +111,8 @@ public class GAs implements BranchPredictor {
         return cacheEntry;
     }
 
-    private Bit[] getDefaultBlock() {
-        Bit[] defaultBlock = new Bit[SC.getLength()];
+    private Bit[] getDefaultBlock(int blockSize) {
+        Bit[] defaultBlock = new Bit[blockSize];
         Arrays.fill(defaultBlock, Bit.ZERO);
         return defaultBlock;
     }
